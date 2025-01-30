@@ -1,0 +1,113 @@
+// prisma/schema.prisma
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// Enums must be defined before they're used
+enum UserRole {
+  DIRECTOR
+  MANAGER
+  AGENT
+  MIT
+}
+
+enum SessionStatus {
+  SCHEDULED
+  COMPLETED
+  CANCELLED
+}
+
+enum SessionType {
+  WEEKLY_CHECKIN
+  PERFORMANCE_REVIEW
+  SKILL_DEVELOPMENT
+  GOAL_SETTING
+}
+
+// Define Office model before User since User references it
+model Office {
+  id          String   @id @default(cuid())
+  name        String   // Austin or Charlotte
+  directorId  String
+  users       User[]
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+// Main User model
+model User {
+  id              String    @id @default(cuid())
+  email           String    @unique
+  name            String
+  role            UserRole
+  officeId        String
+  managerId       String?
+  office          Office    @relation(fields: [officeId], references: [id])
+  manager         User?     @relation("TeamMembers", fields: [managerId], references: [id])
+  teamMembers     User[]    @relation("TeamMembers")
+  coachingSessions CoachingSession[] @relation("Coach")
+  receivedSessions CoachingSession[] @relation("Coachee")
+  metrics         AgentMetrics[]
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@index([email])
+  @@index([managerId])
+}
+
+// Coaching Session model
+model CoachingSession {
+  id            String    @id @default(cuid())
+  date          DateTime
+  coachId       String    // Manager conducting the session
+  coacheeId     String    // Agent being coached
+  status        SessionStatus @default(SCHEDULED)
+  type          SessionType
+  notes         String?   @db.Text
+  outcomes      String?   @db.Text
+  nextSteps     String?   @db.Text
+  metrics       Metric[]
+  coach         User      @relation("Coach", fields: [coachId], references: [id])
+  coachee       User      @relation("Coachee", fields: [coacheeId], references: [id])
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@index([coachId])
+  @@index([coacheeId])
+}
+
+// Metric model for coaching sessions
+model Metric {
+  id          String   @id @default(cuid())
+  sessionId   String
+  name        String   
+  value       Float
+  target      Float
+  session     CoachingSession @relation(fields: [sessionId], references: [id])
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([sessionId])
+}
+
+// New AgentMetrics model for daily performance tracking
+model AgentMetrics {
+  id              String   @id @default(cuid())
+  userId          String
+  date            DateTime
+  callsPerDay     Int
+  talkTime        Float    // in minutes
+  revenue         Float
+  conversionRate  Float    // percentage
+  user            User     @relation(fields: [userId], references: [id])
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([userId])
+  @@index([date])
+}
